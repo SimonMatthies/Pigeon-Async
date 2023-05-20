@@ -6,33 +6,38 @@
 //  Copyright © 2020 Fernando Martín Ortiz. All rights reserved.
 //
 
-import Foundation
 import Combine
+import Foundation
 
 public final class Query<Request, Response: Codable>: ObservableObject, QueryType, QueryInvalidationListener {
     public enum FetchingBehavior {
         case startWhenRequested
         case startImmediately(Request)
     }
+    
     public enum PollingBehavior {
         case noPolling
         case pollEvery(TimeInterval)
     }
+
     var id: Int?
     public typealias State = QueryState<Response>
-    public typealias QueryFetcher = (Request) -> AnyPublisher<Response, Error>
+    public typealias QueryFetcher = (Request) async throws -> Response
     
-    @Published private(set) public var state = State.idle
+    @Published public private(set) var state = State.idle
+    
     public var statePublisher: AnyPublisher<QueryState<Response>, Never> {
         return $state.eraseToAnyPublisher()
     }
+
     public var valuePublisher: AnyPublisher<Response, Never> {
         $state
             .map { $0.value }
-            .filter({ $0 != nil })
+            .filter { $0 != nil }
             .map { $0! }
             .eraseToAnyPublisher()
     }
+
     private let key: QueryKey
     private let keyAdapter: (QueryKey, Request) -> QueryKey
     private let pollingBehavior: PollingBehavior
@@ -66,30 +71,34 @@ public final class Query<Request, Response: Codable>: ObservableObject, QueryTyp
                 switch parameters {
                 case .lastData:
                     if let lastRequest = self.lastRequest {
-                        self.refetch(request: lastRequest)
+                        Task {
+                            await self.refetch(request: lastRequest)
+                        }
                     }
                 case let .newData(newRequest):
-                    self.refetch(request: newRequest)
+                    Task {
+                        await self.refetch(request: newRequest)
+                    }
                 }
             }
             .store(in: &cancellables)
         
-        QueryRegistry.shared.register(self.eraseToAnyQuery(), for: key)
+        QueryRegistry.shared.register(eraseToAnyQuery(), for: key)
     }
     
     deinit {
         QueryRegistry.shared.unregister(for: key)
     }
     
-    public func refetch(request: Request) {
+    public func refetch(request: Request) async {
         lastRequest = request
-        timerCancellables.forEach({ $0.cancel() })
+        timerCancellables.forEach { $0.cancel() }
         
         if cacheConfig.usagePolicy == .useIfFetchFails {
             state = .loading
         }
 
-        performFetch(for: request)
+        await performFetch(for: request)
         startPollingIfNeeded(for: request)
     }
     
@@ -97,14 +106,16 @@ public final class Query<Request, Response: Codable>: ObservableObject, QueryTyp
         switch behavior {
         case .startWhenRequested:
             if cacheConfig.usagePolicy == .useInsteadOfFetching
-                || cacheConfig.usagePolicy == .useAndThenFetch {
-                if let cachedResponse: Response = self.getCacheValueIfPossible(for: key) {
+                || cacheConfig.usagePolicy == .useAndThenFetch
+            {
+                if let cachedResponse: Response = getCacheValueIfPossible(for: key) {
                     state = .succeed(cachedResponse)
                 }
             }
-            break
         case let .startImmediately(request):
-            refetch(request: request)
+            Task {
+                await refetch(request: request)
+            }
         }
     }
     
@@ -116,73 +127,66 @@ public final class Query<Request, Response: Codable>: ObservableObject, QueryTyp
             Timer
                 .publish(every: interval, on: .main, in: RunLoop.Mode.default)
                 .autoconnect()
-                .sink { (_) in
-                    self.performFetch(for: request)
+                .sink { _ in
+                    Task {
+                        await self.performFetch(for: request)
+                    }
                 }
                 .store(in: &timerCancellables)
         }
     }
     
     private func isCacheValid(for key: QueryKey) -> Bool {
-        return self.cache.isValueValid(
+        return cache.isValueValid(
             forKey: key,
             timestamp: Date(),
-            andInvalidationPolicy: self.cacheConfig.invalidationPolicy
+            andInvalidationPolicy: cacheConfig.invalidationPolicy
         )
     }
     
     private func getCacheValueIfPossible(for key: QueryKey) -> Response? {
         if isCacheValid(for: key) {
-           return self.cache.get(for: key)
+            return cache.get(for: key)
         } else {
             return nil
         }
     }
     
-    private func performFetch(for request: Request) {
-        let key = self.keyAdapter(self.key, request)
+    private func performFetch(for request: Request) async {
+        let key = keyAdapter(self.key, request)
         
-        if self.cacheConfig.usagePolicy == .useInsteadOfFetching && isCacheValid(for: key) {
-            if let value: Response = self.cache.get(for: key) {
-                self.state = .succeed(value)
+        if cacheConfig.usagePolicy == .useInsteadOfFetching, isCacheValid(for: key) {
+            if let value: Response = cache.get(for: key) {
+                state = .succeed(value)
             }
             return
         }
         
-        if self.cacheConfig.usagePolicy == .useAndThenFetch {
+        if cacheConfig.usagePolicy == .useAndThenFetch {
             if let value = getCacheValueIfPossible(for: key) {
-                self.state = .succeed(value)
+                state = .succeed(value)
             }
         }
         
-        fetcher(request)
-            .sink(
-                receiveCompletion: { (completion: Subscribers.Completion<Error>) in
-                    switch completion {
-                    case let .failure(error):
-                        self.timerCancellables.forEach({ $0.cancel() })
-                        if self.cacheConfig.usagePolicy == .useIfFetchFails {
-                            if let value = self.getCacheValueIfPossible(for: key) {
-                                self.state = .succeed(value)
-                            } else {
-                                self.state = .failed(error)
-                            }
-                        } else {
-                            self.state = .failed(error)
-                        }
-                    case .finished:
-                        break
-                    }
-                },
-                receiveValue: { (response: Response) in
-                    self.state = .succeed(response)
-                    self.cache.save(
-                        response,
-                        for: key,
-                        andTimestamp: Date()
-                    )
-                }
+        do {
+            let response = try await fetcher(request)
+            state = .succeed(response)
+            cache.save(
+                response,
+                for: key,
+                andTimestamp: Date()
             )
-            .store(in: &cancellables)
+        } catch {
+            timerCancellables.forEach { $0.cancel() }
+            if cacheConfig.usagePolicy == .useIfFetchFails {
+                if let value = getCacheValueIfPossible(for: key) {
+                    state = .succeed(value)
+                } else {
+                    state = .failed(error)
+                }
+            } else {
+                state = .failed(error)
+            }
+        }
     }
 }

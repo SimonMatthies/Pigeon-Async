@@ -6,35 +6,37 @@
 //  Copyright © 2020 Fernando Martín Ortiz. All rights reserved.
 //
 
-import Foundation
 import Combine
+import Foundation
 
 public final class PaginatedQuery<Request, PageIdentifier: PaginatedQueryKey, Response: Codable & Sequence>: ObservableObject, QueryType, QueryInvalidationListener {
-    
     public enum FetchingBehavior {
         case startWhenRequested
         case startImmediately(Request)
     }
+
     public typealias State = QueryState<Response>
-    public typealias QueryFetcher = (Request, PageIdentifier) -> AnyPublisher<Response, Error>
+    public typealias QueryFetcher = (Request, PageIdentifier) async throws -> Response
     
-    @Published private(set) public var items: [Response.Element] = []
+    @Published public private(set) var items: [Response.Element] = []
     @Published private var internalState = State.idle
-    @Published private(set) public var currentPage: PageIdentifier
+    @Published public private(set) var currentPage: PageIdentifier
     private var internalValuePublisher: AnyPublisher<Response, Never> {
         $internalState
             .map { $0.value }
-            .filter({ $0 != nil })
+            .filter { $0 != nil }
             .map { $0! }
             .eraseToAnyPublisher()
     }
+
     public var valuePublisher: AnyPublisher<Response, Never> {
         statePublisher
             .map { $0.value }
-            .filter({ $0 != nil })
+            .filter { $0 != nil }
             .map { $0! }
             .eraseToAnyPublisher()
     }
+
     public var state: QueryState<Response> {
         switch internalState {
         case .idle:
@@ -47,13 +49,15 @@ public final class PaginatedQuery<Request, PageIdentifier: PaginatedQueryKey, Re
             return .succeed(items as! Response)
         }
     }
+
     public var statePublisher: AnyPublisher<QueryState<Response>, Never> {
         $internalState
             .map { _ -> QueryState<Response> in
-                return self.state
+                self.state
             }
             .eraseToAnyPublisher()
     }
+
     private let key: QueryKey
     private let keyAdapter: (QueryKey, Request) -> QueryKey
     private let cache: QueryCacheType
@@ -82,7 +86,7 @@ public final class PaginatedQuery<Request, PageIdentifier: PaginatedQueryKey, Re
         start(for: behavior)
         
         internalValuePublisher
-            .sink { (items) in
+            .sink { items in
                 self.items.append(contentsOf: items)
             }
             .store(in: &cancellables)
@@ -92,114 +96,111 @@ public final class PaginatedQuery<Request, PageIdentifier: PaginatedQueryKey, Re
                 switch parameters {
                 case .lastData:
                     if let lastRequest = self.lastRequest {
-                        self.refetch(request: lastRequest)
+                        Task {
+                            await self.refetch(request: lastRequest)
+                        }
                     }
                 case let .newData(newRequest):
-                    self.refetch(request: newRequest)
+                    Task {
+                        await self.refetch(request: newRequest)
+                    }
                 }
             }
             .store(in: &cancellables)
         
-        QueryRegistry.shared.register(self.eraseToAnyQuery(), for: key)
+        QueryRegistry.shared.register(eraseToAnyQuery(), for: key)
     }
     
     private func start(for behavior: FetchingBehavior) {
         switch behavior {
         case .startWhenRequested:
             if cacheConfig.usagePolicy == .useInsteadOfFetching
-                || cacheConfig.usagePolicy == .useAndThenFetch {
-                if let cachedResponse: Response = self.getCacheValueIfPossible(for: self.key) {
+                || cacheConfig.usagePolicy == .useAndThenFetch
+            {
+                if let cachedResponse: Response = getCacheValueIfPossible(for: key) {
                     internalState = .succeed(cachedResponse)
                 }
             }
-            break
         case let .startImmediately(request):
-            refetchPage(request: request, page: currentPage)
+            Task {
+                await refetchPage(request: request, page: currentPage)
+            }
         }
     }
     
     private func isCacheValid(for key: QueryKey) -> Bool {
-        return self.cache.isValueValid(
+        return cache.isValueValid(
             forKey: key.appending(currentPage),
             timestamp: Date(),
-            andInvalidationPolicy: self.cacheConfig.invalidationPolicy
+            andInvalidationPolicy: cacheConfig.invalidationPolicy
         )
     }
     
     private func getCacheValueIfPossible(for key: QueryKey) -> Response? {
         if isCacheValid(for: key) {
-           return self.cache.get(for: key.appending(currentPage))
+            return cache.get(for: key.appending(currentPage))
         } else {
             return nil
         }
     }
     
-    public func fetchNextPage() {
-        guard let lastRequest = self.lastRequest else {
+    public func fetchNextPage() async {
+        guard let lastRequest = lastRequest else {
             return
         }
         
-        self.currentPage = self.currentPage.next
-        refetchPage(request: lastRequest, page: self.currentPage)
+        currentPage = currentPage.next
+        await refetchPage(request: lastRequest, page: currentPage)
     }
     
-    public func refetch(request: Request) {
+    public func refetch(request: Request) async {
         items = []
         currentPage = currentPage.first
-        refetchCurrent(request: request)
+        await refetchCurrent(request: request)
     }
     
-    private func refetchCurrent(request: Request) {
-        self.refetchPage(request: request, page: currentPage)
+    private func refetchCurrent(request: Request) async {
+        await refetchPage(request: request, page: currentPage)
     }
     
-    private func refetchPage(request: Request, page: PageIdentifier) {
-        let key = self.keyAdapter(self.key, request)
+    private func refetchPage(request: Request, page: PageIdentifier) async {
+        let key = keyAdapter(self.key, request)
         
-        self.lastRequest = request
-        self.currentPage = page
+        lastRequest = request
+        currentPage = page
         
-        if self.cacheConfig.usagePolicy == .useInsteadOfFetching && isCacheValid(for: key) {
-            if let value: Response = self.cache.get(for: key) {
-                self.internalState = .succeed(value)
+        if cacheConfig.usagePolicy == .useInsteadOfFetching, isCacheValid(for: key) {
+            if let value: Response = cache.get(for: key) {
+                internalState = .succeed(value)
             }
             return
         }
         
-        if self.cacheConfig.usagePolicy == .useAndThenFetch {
+        if cacheConfig.usagePolicy == .useAndThenFetch {
             if let value = getCacheValueIfPossible(for: key) {
-                self.internalState = .succeed(value)
+                internalState = .succeed(value)
             }
         }
         
-        if self.cacheConfig.usagePolicy == .useIfFetchFails {
+        if cacheConfig.usagePolicy == .useIfFetchFails {
             internalState = .loading
         }
         
-        fetcher(request, page)
-            .sink(
-                receiveCompletion: { (completion: Subscribers.Completion<Error>) in
-                    switch completion {
-                    case let .failure(error):
-                        self.timerCancellables.forEach({ $0.cancel() })
-                        if self.cacheConfig.usagePolicy == .useIfFetchFails {
-                            if let value = self.getCacheValueIfPossible(for: key) {
-                                self.internalState = .succeed(value)
-                            } else {
-                                self.internalState = .failed(error)
-                            }
-                        } else {
-                            self.internalState = .failed(error)
-                        }
-                    case .finished:
-                        break
-                    }
-                },
-                receiveValue: { (response: Response) in
-                    self.internalState = .succeed(response)
-                    self.cache.save(response, for: key.appending(self.currentPage), andTimestamp: Date())
+        do {
+            let response = try await fetcher(request, page)
+            internalState = .succeed(response)
+            cache.save(response, for: key.appending(currentPage), andTimestamp: Date())
+        } catch {
+            timerCancellables.forEach { $0.cancel() }
+            if cacheConfig.usagePolicy == .useIfFetchFails {
+                if let value = getCacheValueIfPossible(for: key) {
+                    internalState = .succeed(value)
+                } else {
+                    internalState = .failed(error)
                 }
-            )
-            .store(in: &cancellables)
+            } else {
+                internalState = .failed(error)
+            }
+        }
     }
 }
