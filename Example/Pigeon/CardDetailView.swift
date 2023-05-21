@@ -6,10 +6,9 @@
 //  Copyright © 2020 CocoaPods. All rights reserved.
 //
 
+import Combine
 import Foundation
 import SwiftUI
-import Combine
-import Pigeon
 
 struct CardDetailView: View {
     @ObservedObject private var card = Query<String, Card>(
@@ -30,13 +29,13 @@ struct CardDetailView: View {
         }
     )
     private let id: String
-    
+
     let renderer = NameRepresentableRenderer<Card>()
-    
+
     init(id: String) {
         self.id = id
     }
-    
+
     var body: some View {
         renderer.view(for: card.state)
             .navigationBarTitle("Card Detail")
@@ -53,11 +52,11 @@ struct NameRepresentableRenderer<T: NameRepresentable>: QueryRenderer {
     var loadingView: some View {
         Text("Loading...")
     }
-    
+
     func failureView(for failure: Error) -> some View {
         EmptyView()
     }
-    
+
     func successView(for response: T) -> some View {
         Text(response.name)
     }

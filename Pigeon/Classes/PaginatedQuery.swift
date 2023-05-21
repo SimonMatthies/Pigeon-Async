@@ -144,6 +144,7 @@ public final class PaginatedQuery<Request, PageIdentifier: PaginatedQueryKey, Re
         }
     }
     
+    @MainActor
     public func fetchNextPage() async {
         guard let lastRequest = lastRequest else {
             return
@@ -153,16 +154,20 @@ public final class PaginatedQuery<Request, PageIdentifier: PaginatedQueryKey, Re
         await refetchPage(request: lastRequest, page: currentPage)
     }
     
+    
+    @MainActor
     public func refetch(request: Request) async {
         items = []
         currentPage = currentPage.first
         await refetchCurrent(request: request)
     }
     
+    @MainActor
     private func refetchCurrent(request: Request) async {
         await refetchPage(request: request, page: currentPage)
     }
     
+    @MainActor
     private func refetchPage(request: Request, page: PageIdentifier) async {
         let key = keyAdapter(self.key, request)
         

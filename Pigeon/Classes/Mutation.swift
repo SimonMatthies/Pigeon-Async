@@ -20,12 +20,12 @@ public final class Mutation<Request, Response>: ObservableObject {
 
     @Published public var state = State.idle
     private let fetcher: QueryFetcher
-    private var cancellables = Set<AnyCancellable>()
 
     public init(fetcher: @escaping QueryFetcher) {
         self.fetcher = fetcher
     }
 
+    @MainActor
     public func execute(
         with request: Request,
         onSuccess: @escaping (
