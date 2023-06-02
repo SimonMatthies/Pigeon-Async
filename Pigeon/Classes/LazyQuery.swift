@@ -191,6 +191,7 @@ public final class LazyQuery<Request, PageIdentifier: PaginatedQueryKey, Respons
         
         do {
             let response = try await fetcher(request, page)
+            items.append(contentsOf: response)
             internalState = .succeed(items as! Response)
             cache.save(response, for: key.appending(currentPage), andTimestamp: Date())
         } catch {
