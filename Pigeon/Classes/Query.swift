@@ -90,7 +90,6 @@ public final class Query<Request, Response: Codable>: ObservableObject, QueryTyp
         QueryRegistry.shared.unregister(for: key)
     }
     
-    
     @MainActor
     public func refetch(request: Request) async {
         lastRequest = request

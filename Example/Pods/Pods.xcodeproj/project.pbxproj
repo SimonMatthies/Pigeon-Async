@@ -46,6 +46,7 @@
 		D1BC5228127463A1B2C25064A7FB876C /* QueryCacheType.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92765593BB616E764E482376093E163A /* QueryCacheType.swift */; };
 		E51D7FAAB06E288BDE0CEBD4746BDDCF /* AnyQuery.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1BBC1D1AE7AD110E5CEF2B712FA2F2C /* AnyQuery.swift */; };
 		E644449304CA68A523CC323DB148251D /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = B2F778D34C647DF1D6C2DD7D046ADF4A /* Foundation.framework */; };
+		F47E43DA2A27F74100F478EE /* LazyQuery.swift in Sources */ = {isa = PBXBuildFile; fileRef = F47E43D92A27F74100F478EE /* LazyQuery.swift */; };
 		F8EB7195CA9F2468224D85DEC19C6B51 /* Combine.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 29031B265D949D984C748EA2C89A441A /* Combine.framework */; };
 /* End PBXBuildFile section */
 
@@ -124,6 +125,7 @@
 		DD2C01BE5E67E733DF2F62615C4D778D /* Pigeon.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = Pigeon.debug.xcconfig; sourceTree = "<group>"; };
 		E3070E81D31BF851926A3FE0C3783376 /* Pods-Pigeon_Tests.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "Pods-Pigeon_Tests.debug.xcconfig"; sourceTree = "<group>"; };
 		E935B88BA0BCC9CF820733E873A86C45 /* README.md */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		F47E43D92A27F74100F478EE /* LazyQuery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LazyQuery.swift; sourceTree = "<group>"; };
 		F72ED8A344FEC5BA415B91FDFFDFB410 /* InMemoryQueryCache.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InMemoryQueryCache.swift; sourceTree = "<group>"; };
 		FC76DCBE221FE22B6E338DF0F68D46CF /* Pods-Pigeon_Example.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; path = "Pods-Pigeon_Example.release.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -172,6 +174,7 @@
 				D1BBC1D1AE7AD110E5CEF2B712FA2F2C /* AnyQuery.swift */,
 				1EE080EC66289C5712C0E3BD4BF504A6 /* Mutation.swift */,
 				28CF0C6662E6B9857A5C2C626E1BA493 /* PaginatedQuery.swift */,
+				F47E43D92A27F74100F478EE /* LazyQuery.swift */,
 				70515E9121B6F15BB2E2CBC091701E60 /* Query.swift */,
 				A8A1D466485982832CB441AD9F6F47F6 /* QueryConsumer.swift */,
 				55F5CCB3B148AE09DAB098679B4CFBF9 /* QueryRenderer.swift */,
@@ -508,6 +511,7 @@
 				AB2682B343C47355CD47A3FB01E34473 /* InMemoryQueryCache.swift in Sources */,
 				635824CBCC52DDC9AA8C6FEEB03274F0 /* Mutation.swift in Sources */,
 				449FFCDEC58C013773E076F1BD8F146A /* PaginatedQuery.swift in Sources */,
+				F47E43DA2A27F74100F478EE /* LazyQuery.swift in Sources */,
 				9BED6418093A7C2A0FAFC3C1AC25D6E2 /* PaginatedQueryKey.swift in Sources */,
 				9906736771FC87F15719CE7F9D231694 /* Pigeon-dummy.m in Sources */,
 				00A8CBA2E0D3BD8AA395E176A3F0B756 /* Query.swift in Sources */,

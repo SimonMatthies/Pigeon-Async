@@ -1,15 +1,14 @@
 //
-//  PaginatedQuery.swift
+//  LazyQuery.swift
 //  Pigeon
 //
-//  Created by Fernando Martín Ortiz on 23/08/2020.
-//  Copyright © 2020 Fernando Martín Ortiz. All rights reserved.
+//  Created by Simon Matthies on 31.05.23.
 //
 
 import Combine
 import Foundation
 
-public final class PaginatedQuery<Request, PageIdentifier: PaginatedQueryKey, Response: Codable & Sequence>: ObservableObject, QueryType, QueryInvalidationListener {
+public final class LazyQuery<Request, PageIdentifier: PaginatedQueryKey, Response: Codable & Sequence>: ObservableObject, QueryType, QueryInvalidationListener {
     public enum FetchingBehavior {
         case startWhenRequested
         case startImmediately(Request)
@@ -192,8 +191,7 @@ public final class PaginatedQuery<Request, PageIdentifier: PaginatedQueryKey, Re
         
         do {
             let response = try await fetcher(request, page)
-
-            internalState = .succeed(response)
+            internalState = .succeed(items as! Response)
             cache.save(response, for: key.appending(currentPage), andTimestamp: Date())
         } catch {
             timerCancellables.forEach { $0.cancel() }
